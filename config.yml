@@ -1,0 +1,38 @@
+http:
+  routers:
+    api-ingress:
+      service: api@internal
+      rule: Host(`foo.example`)
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "foo.example"
+      middlewares:
+        - secured
+
+  middlewares:
+    strip_slash:
+      redirectregex:
+        regex: ^(.*)/$
+        replacement: ${1}
+        permanent: true
+
+    # https://doc.traefik.io/traefik/middlewares/chain/#configuration-example
+    secured:
+      chain:
+        middlewares:
+          - https_only
+          - auth_users
+
+    https_only:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    # https://doc.traefik.io/traefik/middlewares/basicauth/#configuration-examples
+    # To create user:password pair, it's possible to use this command:
+    # echo $(htpasswd -nB replace_user_name) | sed -e s/\\$/\\$\\$/g
+    auth_users:
+      basicAuth:
+        users:
+          - 'john:password'

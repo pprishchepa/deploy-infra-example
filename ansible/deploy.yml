@@ -1,0 +1,72 @@
+- hosts: all
+  remote_user: root
+  tasks:
+    - name: Define vars
+      set_fact:
+        project_name: ingress
+        github_repo: pprishchepa/deploy-infra-example
+        github_user: "{{ lookup('env', 'GITHUB_USERNAME') }}"
+        github_token: "{{ lookup('env', 'GITHUB_ACCESS_TOKEN') }}"
+
+    - name: Define vars
+      set_fact:
+        project_app: "/opt/server/apps/{{ project_name }}"
+        project_data: "/opt/server/data/{{ project_name }}"
+        project_backups: "/opt/server/backups/{{ project_name }}"
+
+    - name: Create app dir
+      ansible.builtin.file:
+        path: "{{ project_app }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create data dir
+      ansible.builtin.file:
+        path: "{{ project_data }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create backups dir
+      ansible.builtin.file:
+        path: "{{ project_backups }}"
+        state: directory
+        mode: '0755'
+
+    - name: Checkout codebase
+      ansible.builtin.git:
+        force: yes
+        repo: "https://{{ github_user }}:{{ github_token }}@github.com/{{ github_repo }}.git"
+        dest: "{{ project_app }}"
+        version: "{{ lookup('vars', 'commit-sha1', default='HEAD') }}"
+      environment:
+        GIT_TERMINAL_PROMPT: 0
+
+    - name: Update .env file
+      shell: |
+        echo "PROJECT_ENV=production"           >  {{ project_app }}/.env
+        echo "PROJECT_NAME={{ project_name }}"  >> {{ project_app }}/.env
+        echo "PROJECT_DATA={{ project_data }}"  >> {{ project_app }}/.env
+        echo "TRAEFIK_YML_HASH="$(md5sum {{ project_app }}/traefik.yml  | awk '{ print $1 }') >> {{ project_app }}/.env
+        echo "CONFIG_YML_HASH="$(md5sum {{ project_app }}/config.yml  | awk '{ print $1 }')   >> {{ project_app }}/.env
+        echo "CLOUDFLARE_EMAIL={{ lookup('env', 'CLOUDFLARE_EMAIL') }}"   >> {{ project_app }}/.env
+        echo "CLOUDFLARE_DNS_API_TOKEN={{ lookup('env', 'CLOUDFLARE_DNS_API_TOKEN') }}"       >> {{ project_app }}/.env
+
+    - name: Create ingress network
+      community.docker.docker_network:
+        name: ingress
+        driver: bridge
+        attachable: yes
+        internal: false
+
+    - name: Init docker-compose.yml
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ project_app }}/docker-compose.production.yml.dist"
+        dest: "{{ project_app }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Run `docker-compose up`
+      community.docker.docker_compose:
+        project_src: "{{ project_app }}"
+        build: yes
+        remove_orphans: yes

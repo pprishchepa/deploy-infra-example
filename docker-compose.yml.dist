@@ -1,0 +1,27 @@
+version: "3.3"
+
+services:
+  ingress:
+    image: traefik:v2.4.11
+    restart: always
+    privileged: true
+    environment:
+      - TRAEFIK_YML_HASH
+      - CONFIG_YML_HASH
+      - CLOUDFLARE_EMAIL
+      - CLOUDFLARE_DNS_API_TOKEN
+    networks:
+      - ingress
+    ports:
+      - "443:443"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/traefik.yml:ro
+      - ./config.yml:/config.yml:ro
+      - ${PROJECT_DATA}:/data
+
+networks:
+  ingress:
+    external:
+      name: ingress

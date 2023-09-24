@@ -1,0 +1,37 @@
+- hosts: all
+  remote_user: root
+  tasks:
+    - name: Install packages
+      ansible.builtin.package:
+        name:
+          - docker
+          - docker-compose
+          - git
+          - make
+          - wget
+          - mc
+          - ncdu
+          - openssl
+        state: latest
+
+    - name: Stat /usr/local/bin/ctop
+      stat:
+        path: /usr/local/bin/ctop
+      register: ctop_stats
+
+    - name: Install ctop
+      shell: |
+        wget https://github.com/bcicen/ctop/releases/download/0.7.6/ctop-0.7.6-linux-amd64 -O /usr/local/bin/ctop
+        chmod +x /usr/local/bin/ctop
+      when: ctop_stats.stat.exists == false
+
+    - name: Start docker
+      ansible.builtin.systemd:
+        state: started
+        name: docker
+
+    - name: Create root dir
+      ansible.builtin.file:
+        path: /opt/server
+        state: directory
+        mode: '0755'
